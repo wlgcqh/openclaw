@@ -4,6 +4,7 @@ import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 
 const MAX_ENTRIES = 2_048;
 const TOPIC_NAME_CACHE_STATE_KEY = Symbol.for("openclaw.telegramTopicNameCacheState");
+const DEFAULT_TOPIC_NAME_CACHE_KEY = "__default__";
 
 export type TopicEntry = {
   name: string;
@@ -15,11 +16,25 @@ export type TopicEntry = {
 
 type TopicNameStore = Map<string, TopicEntry>;
 
-type TopicNameCacheState = {
+type TopicNameStoreState = {
   lastUpdatedAt: number;
-  persistedPath?: string;
   store: TopicNameStore;
 };
+
+type TopicNameCacheState = {
+  stores: Map<string, TopicNameStoreState>;
+};
+
+function createTopicNameStore(): TopicNameStore {
+  return new Map<string, TopicEntry>();
+}
+
+function createTopicNameStoreState(): TopicNameStoreState {
+  return {
+    lastUpdatedAt: 0,
+    store: createTopicNameStore(),
+  };
+}
 
 function getTopicNameCacheState(): TopicNameCacheState {
   const globalStore = globalThis as Record<PropertyKey, unknown>;
@@ -27,13 +42,9 @@ function getTopicNameCacheState(): TopicNameCacheState {
   if (existing) {
     return existing;
   }
-  const state: TopicNameCacheState = { lastUpdatedAt: 0, store: createTopicNameStore() };
+  const state: TopicNameCacheState = { stores: new Map() };
   globalStore[TOPIC_NAME_CACHE_STATE_KEY] = state;
   return state;
-}
-
-function createTopicNameStore(): TopicNameStore {
-  return new Map<string, TopicEntry>();
 }
 
 function cacheKey(chatId: number | string, threadId: number | string): string {
@@ -82,7 +93,7 @@ function readPersistedTopicNames(persistedPath: string): TopicNameStore {
     const raw = fs.readFileSync(persistedPath, "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const entries = Object.entries(parsed)
-      .filter(([, value]) => isTopicEntry(value))
+      .filter((entry): entry is [string, TopicEntry] => isTopicEntry(entry[1]))
       .toSorted(([, left], [, right]) => right.updatedAt - left.updatedAt)
       .slice(0, MAX_ENTRIES);
     return new Map(entries);
@@ -92,21 +103,42 @@ function readPersistedTopicNames(persistedPath: string): TopicNameStore {
   }
 }
 
-function getTopicStore(persistedPath?: string): TopicNameStore {
+function getTopicStoreState(persistedPath?: string): TopicNameStoreState {
   const state = getTopicNameCacheState();
-  if (persistedPath && state.persistedPath !== persistedPath) {
-    state.store = readPersistedTopicNames(persistedPath);
-    state.persistedPath = persistedPath;
-    state.lastUpdatedAt = Math.max(0, ...state.store.values().map((entry) => entry.updatedAt));
+  const stateKey = persistedPath ?? DEFAULT_TOPIC_NAME_CACHE_KEY;
+  const existing = state.stores.get(stateKey);
+  if (existing) {
+    return existing;
   }
-  return state.store;
+  const next = persistedPath
+    ? {
+        lastUpdatedAt: 0,
+        store: readPersistedTopicNames(persistedPath),
+      }
+    : createTopicNameStoreState();
+  next.lastUpdatedAt = Math.max(0, ...next.store.values().map((entry) => entry.updatedAt));
+  state.stores.set(stateKey, next);
+  return next;
 }
 
-function nextUpdatedAt(): number {
-  const state = getTopicNameCacheState();
+function getTopicStore(persistedPath?: string): TopicNameStore {
+  return getTopicStoreState(persistedPath).store;
+}
+
+function nextUpdatedAt(persistedPath?: string): number {
+  const state = getTopicStoreState(persistedPath);
   const now = Date.now();
   state.lastUpdatedAt = now > state.lastUpdatedAt ? now : state.lastUpdatedAt + 1;
   return state.lastUpdatedAt;
+}
+
+function removeTopicStore(persistedPath?: string): void {
+  const state = getTopicNameCacheState();
+  const stateKey = persistedPath ?? DEFAULT_TOPIC_NAME_CACHE_KEY;
+  if (persistedPath) {
+    fs.rmSync(persistedPath, { force: true });
+  }
+  state.stores.delete(stateKey);
 }
 
 function persistTopicStore(persistedPath: string, store: TopicNameStore): void {
@@ -134,7 +166,7 @@ export function updateTopicName(
     iconColor: patch.iconColor ?? existing?.iconColor,
     iconCustomEmojiId: patch.iconCustomEmojiId ?? existing?.iconCustomEmojiId,
     closed: patch.closed ?? existing?.closed,
-    updatedAt: nextUpdatedAt(),
+    updatedAt: nextUpdatedAt(persistedPath),
   };
   if (!merged.name) {
     return;
@@ -157,7 +189,7 @@ export function getTopicName(
 ): string | undefined {
   const entry = getTopicStore(persistedPath).get(cacheKey(chatId, threadId));
   if (entry) {
-    entry.updatedAt = nextUpdatedAt();
+    entry.updatedAt = nextUpdatedAt(persistedPath);
   }
   return entry?.name;
 }
@@ -172,9 +204,9 @@ export function getTopicEntry(
 
 export function clearTopicNameCache(): void {
   const state = getTopicNameCacheState();
-  state.store.clear();
-  state.persistedPath = undefined;
-  state.lastUpdatedAt = 0;
+  for (const stateKey of state.stores.keys()) {
+    removeTopicStore(stateKey === DEFAULT_TOPIC_NAME_CACHE_KEY ? undefined : stateKey);
+  }
 }
 
 export function topicNameCacheSize(): number {
@@ -182,8 +214,5 @@ export function topicNameCacheSize(): number {
 }
 
 export function resetTopicNameCacheForTest(): void {
-  const state = getTopicNameCacheState();
-  state.lastUpdatedAt = 0;
-  state.store = createTopicNameStore();
-  state.persistedPath = undefined;
+  getTopicNameCacheState().stores.clear();
 }
