@@ -594,6 +594,8 @@ export function attachGatewayWsMessageHandler(params: {
             hasDeviceIdentity: Boolean(device),
             role,
             isControlUi,
+            isWebchat,
+            authMode: resolvedAuth.mode,
             controlUiAuthPolicy,
             trustedProxyAuthOk,
             sharedAuthOk,
@@ -611,6 +613,8 @@ export function attachGatewayWsMessageHandler(params: {
               controlUiAuthPolicy,
               preserveInsecureLocalControlUiScopes,
               authMethod,
+              authMode: resolvedAuth.mode,
+              isWebchat,
               trustedProxyAuthOk,
             })
           ) {

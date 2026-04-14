@@ -86,8 +86,15 @@ export function shouldClearUnboundScopesForMissingDeviceIdentity(params: {
   controlUiAuthPolicy: ControlUiAuthPolicy;
   preserveInsecureLocalControlUiScopes: boolean;
   authMethod: string | undefined;
+  authMode?: string;
+  isWebchat?: boolean;
   trustedProxyAuthOk?: boolean;
 }): boolean {
+  // When auth is completely disabled (mode=none), webchat clients should keep
+  // their self-declared scopes since there's no shared secret to bind them anyway.
+  if (params.authMode === "none" && params.isWebchat) {
+    return false;
+  }
   return (
     params.decision.kind !== "allow" ||
     (!params.controlUiAuthPolicy.allowBypass &&
@@ -105,6 +112,8 @@ export function evaluateMissingDeviceIdentity(params: {
   hasDeviceIdentity: boolean;
   role: GatewayRole;
   isControlUi: boolean;
+  isWebchat?: boolean;
+  authMode?: string;
   controlUiAuthPolicy: ControlUiAuthPolicy;
   trustedProxyAuthOk?: boolean;
   sharedAuthOk: boolean;
@@ -116,6 +125,16 @@ export function evaluateMissingDeviceIdentity(params: {
     return { kind: "allow" };
   }
   if (params.isControlUi && params.trustedProxyAuthOk) {
+    return { kind: "allow" };
+  }
+  // When auth is completely disabled (mode=none), webchat clients should be able
+  // to connect without device identity, similar to Control UI. This is because
+  // there's no shared secret to gate access anyway.
+  if (
+    params.authMode === "none" &&
+    params.role === "operator" &&
+    (params.isControlUi || params.isWebchat)
+  ) {
     return { kind: "allow" };
   }
   if (params.isControlUi && params.controlUiAuthPolicy.allowBypass && params.role === "operator") {

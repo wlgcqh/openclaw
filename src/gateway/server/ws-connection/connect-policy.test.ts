@@ -369,4 +369,100 @@ describe("ws connect policy", () => {
       }),
     ).toBe(true);
   });
+
+  test("webchat with auth.mode=none bypasses device identity and keeps scopes", () => {
+    const nonControlUi = resolveControlUiAuthPolicy({
+      isControlUi: false,
+      controlUiConfig: undefined,
+      deviceRaw: null,
+    });
+
+    // Webchat + operator + auth.mode=none: allow without device identity
+    expect(
+      evaluateMissingDeviceIdentity({
+        hasDeviceIdentity: false,
+        role: "operator",
+        isControlUi: false,
+        isWebchat: true,
+        authMode: "none",
+        controlUiAuthPolicy: nonControlUi,
+        trustedProxyAuthOk: false,
+        sharedAuthOk: false,
+        authOk: true,
+        hasSharedAuth: false,
+        isLocalClient: true,
+      }).kind,
+    ).toBe("allow");
+
+    // Webchat + node role + auth.mode=none: still require device identity
+    expect(
+      evaluateMissingDeviceIdentity({
+        hasDeviceIdentity: false,
+        role: "node",
+        isControlUi: false,
+        isWebchat: true,
+        authMode: "none",
+        controlUiAuthPolicy: nonControlUi,
+        trustedProxyAuthOk: false,
+        sharedAuthOk: false,
+        authOk: true,
+        hasSharedAuth: false,
+        isLocalClient: true,
+      }).kind,
+    ).toBe("reject-device-required");
+
+    // Webchat + operator + auth.mode=token: require shared auth
+    expect(
+      evaluateMissingDeviceIdentity({
+        hasDeviceIdentity: false,
+        role: "operator",
+        isControlUi: false,
+        isWebchat: true,
+        authMode: "token",
+        controlUiAuthPolicy: nonControlUi,
+        trustedProxyAuthOk: false,
+        sharedAuthOk: false,
+        authOk: false,
+        hasSharedAuth: true,
+        isLocalClient: true,
+      }).kind,
+    ).toBe("reject-unauthorized");
+
+    // Webchat + auth.mode=none: keep scopes
+    expect(
+      shouldClearUnboundScopesForMissingDeviceIdentity({
+        decision: { kind: "allow" },
+        controlUiAuthPolicy: nonControlUi,
+        preserveInsecureLocalControlUiScopes: false,
+        authMethod: undefined,
+        authMode: "none",
+        isWebchat: true,
+      }),
+    ).toBe(false);
+
+    // Non-webchat + auth.mode=none + decision.kind=allow: also keeps scopes
+    // (because decision.kind is "allow" and no authMethod matches clearing conditions)
+    expect(
+      shouldClearUnboundScopesForMissingDeviceIdentity({
+        decision: { kind: "allow" },
+        controlUiAuthPolicy: nonControlUi,
+        preserveInsecureLocalControlUiScopes: false,
+        authMethod: undefined,
+        authMode: "none",
+        isWebchat: false,
+      }),
+    ).toBe(false);
+
+    // Non-webchat + auth.mode=token + decision.kind=allow: clears scopes
+    expect(
+      shouldClearUnboundScopesForMissingDeviceIdentity({
+        decision: { kind: "allow" },
+        controlUiAuthPolicy: nonControlUi,
+        preserveInsecureLocalControlUiScopes: false,
+        authMethod: "token",
+        authMode: "token",
+        isWebchat: false,
+      }),
+    ).toBe(true);
+  });
 });
