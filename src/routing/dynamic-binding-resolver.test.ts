@@ -29,7 +29,8 @@ describe("dynamic-binding-resolver", () => {
 
   describe("isDynamicBindingEnabled", () => {
     it("returns true by default", () => {
-      setDynamicBindingOptions({ enabled: true });
+      // Tests actual default without prior modification
+      // (beforeEach already sets enabled: true, which is the default)
       expect(isDynamicBindingEnabled()).toBe(true);
     });
 
@@ -62,6 +63,25 @@ describe("dynamic-binding-resolver", () => {
     it("returns null when senderId not bound", async () => {
       const result = await resolveDynamicBinding({
         senderId: "+15559999999",
+        channel: "custom",
+        storageService,
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null when binding exists but agent record missing", async () => {
+      // Data inconsistency scenario: binding exists but agent was never registered
+      await storageService.addBinding({
+        senderId: "+15551234567",
+        userId: "emp001",
+        agentId: "agent_emp001",
+        createdAt: Date.now(),
+      });
+      // Deliberately do NOT add agent record
+
+      const result = await resolveDynamicBinding({
+        senderId: "+15551234567",
         channel: "custom",
         storageService,
       });

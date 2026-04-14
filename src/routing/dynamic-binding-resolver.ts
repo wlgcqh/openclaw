@@ -30,7 +30,7 @@ export function isDynamicBindingEnabled(): boolean {
 
 export type ResolveDynamicBindingParams = {
   senderId: string;
-  channel: string;
+  channel: string; // Reserved for future channel-specific routing decisions
   storageService: DynamicAgentStorageService;
 };
 
