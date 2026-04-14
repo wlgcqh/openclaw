@@ -1,4 +1,5 @@
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { getGlobalDynamicAgentStorageService } from "../agents/dynamic-agent-storage.js";
 import type { ChatType } from "../channels/chat-type.js";
 import { normalizeChatType } from "../channels/chat-type.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -6,6 +7,7 @@ import { shouldLogVerbose } from "../globals.js";
 import { logDebug } from "../logger.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { listBindings } from "./bindings.js";
+import { isDynamicBindingEnabled } from "./dynamic-binding-resolver.js";
 import {
   buildAgentMainSessionKey,
   buildAgentPeerSessionKey,
@@ -49,6 +51,7 @@ export type ResolvedAgentRoute = {
   lastRoutePolicy: "main" | "session";
   /** Match description for debugging/logging. */
   matchedBy:
+    | "binding.dynamic"
     | "binding.peer"
     | "binding.peer.parent"
     | "binding.peer.wildcard"
@@ -673,9 +676,7 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     }
   }
 
-  const bindings = getEvaluatedBindingsForChannelAccount(input.cfg, channel, accountId);
-  const bindingsIndex = getEvaluatedBindingIndexForChannelAccount(input.cfg, channel, accountId);
-
+  // Define the choose function early so it can be used by dynamic binding check
   const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
     const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
     const sessionKey = normalizeLowercaseStringOrEmpty(
@@ -712,6 +713,25 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     }
     return route;
   };
+
+  // Dynamic binding check: for direct peers, check dynamic bindings first
+  // Dynamic bindings have priority over static config bindings
+  if (isDynamicBindingEnabled() && peer && peer.kind === "direct" && peer.id) {
+    const storageService = getGlobalDynamicAgentStorageService();
+    if (storageService) {
+      const dynamicBinding = storageService.resolveBinding(peer.id);
+      if (dynamicBinding) {
+        const dynamicAgent = storageService.resolveAgent(dynamicBinding.agentId);
+        if (dynamicAgent) {
+          // Route to the dynamically bound agent
+          return choose(dynamicBinding.agentId, "binding.dynamic");
+        }
+      }
+    }
+  }
+
+  const bindings = getEvaluatedBindingsForChannelAccount(input.cfg, channel, accountId);
+  const bindingsIndex = getEvaluatedBindingIndexForChannelAccount(input.cfg, channel, accountId);
 
   const formatPeer = (value?: RoutePeer | null) =>
     value?.kind && value?.id ? `${value.kind}:${value.id}` : "none";

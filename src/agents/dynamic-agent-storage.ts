@@ -162,3 +162,26 @@ export class DynamicAgentStorageService {
     return this.storage.agents.find((a) => a.agentId === agentId) ?? null;
   }
 }
+
+// Global storage service singleton for routing integration
+let globalStorageService: DynamicAgentStorageService | null = null;
+
+export function getGlobalDynamicAgentStorageService(): DynamicAgentStorageService | null {
+  return globalStorageService;
+}
+
+export function setGlobalDynamicAgentStorageService(service: DynamicAgentStorageService): void {
+  globalStorageService = service;
+}
+
+export function initializeGlobalDynamicAgentStorage(
+  options?: DynamicAgentStorageServiceOptions,
+): DynamicAgentStorageService {
+  const service = new DynamicAgentStorageService(options);
+  globalStorageService = service;
+  return service;
+}
+
+export function clearGlobalDynamicAgentStorageService(): void {
+  globalStorageService = null;
+}

@@ -1,6 +1,15 @@
-import { describe, expect, test, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+import {
+  DynamicAgentStorageService,
+  clearGlobalDynamicAgentStorageService,
+  initializeGlobalDynamicAgentStorage,
+} from "../agents/dynamic-agent-storage.js";
 import type { OpenClawConfig } from "../config/config.js";
 import * as routingBindings from "./bindings.js";
+import { setDynamicBindingOptions } from "./dynamic-binding-resolver.js";
 import {
   deriveLastRoutePolicy,
   resolveAgentRoute,
@@ -1098,5 +1107,334 @@ describe("binding evaluation cache scalability", () => {
     } finally {
       listBindingsSpy.mockRestore();
     }
+  });
+});
+
+describe("dynamic binding routing", () => {
+  let tempDir: string;
+  let storagePath: string;
+  let storageService: DynamicAgentStorageService;
+
+  beforeEach(async () => {
+    tempDir = path.join(os.tmpdir(), `dynamic-routing-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+    storagePath = path.join(tempDir, "dynamic_agents.json");
+
+    // Initialize global storage service
+    storageService = initializeGlobalDynamicAgentStorage({ storagePath });
+    await storageService.load();
+
+    // Enable dynamic binding
+    setDynamicBindingOptions({ enabled: true });
+  });
+
+  afterEach(async () => {
+    // Clean up global storage service
+    clearGlobalDynamicAgentStorageService();
+
+    // Reset dynamic binding options
+    setDynamicBindingOptions({ enabled: false });
+
+    // Clean up temp directory
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  test("routes to dynamic agent when binding exists for direct peer", async () => {
+    const senderId = "+15551234567";
+    const agentId = "dynamic-agent-001";
+
+    // Add dynamic binding
+    await storageService.addBinding({
+      senderId,
+      userId: "emp001",
+      agentId,
+      createdAt: Date.now(),
+    });
+
+    // Add agent record
+    await storageService.addAgent({
+      agentId,
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    const cfg: OpenClawConfig = {};
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: null,
+      peer: { kind: "direct", id: senderId },
+    });
+
+    expect(route.agentId).toBe(agentId);
+    expect(route.matchedBy).toBe("binding.dynamic");
+  });
+
+  test("dynamic binding takes priority over static peer binding", async () => {
+    const senderId = "+15551234567";
+    const dynamicAgentId = "dynamic-agent-001";
+    const staticAgentId = "static-agent";
+
+    // Add dynamic binding
+    await storageService.addBinding({
+      senderId,
+      userId: "emp001",
+      agentId: dynamicAgentId,
+      createdAt: Date.now(),
+    });
+
+    // Add agent record
+    await storageService.addAgent({
+      agentId: dynamicAgentId,
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    // Configure static binding for the same peer
+    const cfg: OpenClawConfig = {
+      bindings: [
+        {
+          agentId: staticAgentId,
+          match: {
+            channel: "whatsapp",
+            peer: { kind: "direct", id: senderId },
+          },
+        },
+      ],
+    };
+
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: null,
+      peer: { kind: "direct", id: senderId },
+    });
+
+    // Dynamic binding should win
+    expect(route.agentId).toBe(dynamicAgentId);
+    expect(route.matchedBy).toBe("binding.dynamic");
+  });
+
+  test("dynamic binding takes priority over static account binding", async () => {
+    const senderId = "+15551234567";
+    const dynamicAgentId = "dynamic-agent-001";
+    const staticAgentId = "static-agent";
+
+    // Add dynamic binding
+    await storageService.addBinding({
+      senderId,
+      userId: "emp001",
+      agentId: dynamicAgentId,
+      createdAt: Date.now(),
+    });
+
+    // Add agent record
+    await storageService.addAgent({
+      agentId: dynamicAgentId,
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    // Configure static account binding
+    const cfg: OpenClawConfig = {
+      bindings: [
+        {
+          agentId: staticAgentId,
+          match: {
+            channel: "whatsapp",
+            accountId: "*",
+          },
+        },
+      ],
+    };
+
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: "biz",
+      peer: { kind: "direct", id: senderId },
+    });
+
+    // Dynamic binding should win
+    expect(route.agentId).toBe(dynamicAgentId);
+    expect(route.matchedBy).toBe("binding.dynamic");
+  });
+
+  test("falls back to static binding when dynamic binding is disabled", async () => {
+    const senderId = "+15551234567";
+    const dynamicAgentId = "dynamic-agent-001";
+    const staticAgentId = "static-agent";
+
+    // Add dynamic binding
+    await storageService.addBinding({
+      senderId,
+      userId: "emp001",
+      agentId: dynamicAgentId,
+      createdAt: Date.now(),
+    });
+
+    // Add agent record
+    await storageService.addAgent({
+      agentId: dynamicAgentId,
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    // Disable dynamic binding
+    setDynamicBindingOptions({ enabled: false });
+
+    // Configure static binding
+    const cfg: OpenClawConfig = {
+      bindings: [
+        {
+          agentId: staticAgentId,
+          match: {
+            channel: "whatsapp",
+            peer: { kind: "direct", id: senderId },
+          },
+        },
+      ],
+    };
+
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: null,
+      peer: { kind: "direct", id: senderId },
+    });
+
+    // Static binding should win since dynamic is disabled
+    expect(route.agentId).toBe(staticAgentId);
+    expect(route.matchedBy).toBe("binding.peer");
+  });
+
+  test("falls back to static binding when no dynamic binding exists", async () => {
+    const senderId = "+15551234567";
+    const staticAgentId = "static-agent";
+
+    // No dynamic binding added for this sender
+
+    // Configure static binding
+    const cfg: OpenClawConfig = {
+      bindings: [
+        {
+          agentId: staticAgentId,
+          match: {
+            channel: "whatsapp",
+            peer: { kind: "direct", id: senderId },
+          },
+        },
+      ],
+    };
+
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: null,
+      peer: { kind: "direct", id: senderId },
+    });
+
+    // Static binding should win since no dynamic binding exists
+    expect(route.agentId).toBe(staticAgentId);
+    expect(route.matchedBy).toBe("binding.peer");
+  });
+
+  test("does not use dynamic binding for non-direct peers", async () => {
+    const channelId = "channel-123";
+    const dynamicAgentId = "dynamic-agent-001";
+    const staticAgentId = "static-agent";
+
+    // Add dynamic binding using the same ID (but this should not affect group/channel routing)
+    await storageService.addBinding({
+      senderId: channelId,
+      userId: "emp001",
+      agentId: dynamicAgentId,
+      createdAt: Date.now(),
+    });
+
+    // Add agent record
+    await storageService.addAgent({
+      agentId: dynamicAgentId,
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    // Configure static binding for the channel
+    const cfg: OpenClawConfig = {
+      bindings: [
+        {
+          agentId: staticAgentId,
+          match: {
+            channel: "discord",
+            peer: { kind: "channel", id: channelId },
+          },
+        },
+      ],
+    };
+
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "discord",
+      accountId: null,
+      peer: { kind: "channel", id: channelId },
+    });
+
+    // Static binding should win since dynamic bindings only apply to direct peers
+    expect(route.agentId).toBe(staticAgentId);
+    expect(route.matchedBy).toBe("binding.peer");
+  });
+
+  test("falls back to default when dynamic binding exists but agent record missing", async () => {
+    const senderId = "+15551234567";
+    const dynamicAgentId = "dynamic-agent-001";
+
+    // Add dynamic binding but NO agent record
+    await storageService.addBinding({
+      senderId,
+      userId: "emp001",
+      agentId: dynamicAgentId,
+      createdAt: Date.now(),
+    });
+
+    const cfg: OpenClawConfig = {};
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: null,
+      peer: { kind: "direct", id: senderId },
+    });
+
+    // Should fall back to default since agent record is missing
+    expect(route.agentId).toBe("main");
+    expect(route.matchedBy).toBe("default");
+  });
+
+  test("falls back to default when global storage service is not set", async () => {
+    const senderId = "+15551234567";
+
+    // Clear global storage service
+    clearGlobalDynamicAgentStorageService();
+
+    const cfg: OpenClawConfig = {};
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "whatsapp",
+      accountId: null,
+      peer: { kind: "direct", id: senderId },
+    });
+
+    // Should fall back to default
+    expect(route.agentId).toBe("main");
+    expect(route.matchedBy).toBe("default");
   });
 });
