@@ -27,4 +27,86 @@ describe("DynamicAgentStorageService", () => {
     expect(storage.bindings).toEqual([]);
     expect(storage.agents).toEqual([]);
   });
+
+  it("resolveBinding returns binding by senderId", async () => {
+    await service.load();
+    await service.addBinding({
+      senderId: "+15551234567",
+      userId: "emp001",
+      agentId: "agent_emp001",
+      createdAt: Date.now(),
+    });
+
+    const binding = service.resolveBinding("+15551234567");
+    expect(binding).toBeDefined();
+    expect(binding?.userId).toBe("emp001");
+    expect(binding?.agentId).toBe("agent_emp001");
+  });
+
+  it("resolveBinding returns null for unknown senderId", async () => {
+    await service.load();
+    const binding = service.resolveBinding("+15559999999");
+    expect(binding).toBeNull();
+  });
+
+  it("removeBinding removes binding and returns it", async () => {
+    await service.load();
+    await service.addBinding({
+      senderId: "+15551234567",
+      userId: "emp001",
+      agentId: "agent_emp001",
+      createdAt: Date.now(),
+    });
+
+    const removed = await service.removeBinding("+15551234567");
+    expect(removed).toBeDefined();
+    expect(removed?.userId).toBe("emp001");
+
+    const binding = service.resolveBinding("+15551234567");
+    expect(binding).toBeNull();
+  });
+
+  it("removeBinding returns null for unknown senderId", async () => {
+    await service.load();
+    const removed = await service.removeBinding("+15559999999");
+    expect(removed).toBeNull();
+  });
+
+  it("addAgent registers agent record", async () => {
+    await service.load();
+    await service.addAgent({
+      agentId: "agent_emp001",
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    const storage = await service.load();
+    const agent = storage.agents.find((a) => a.agentId === "agent_emp001");
+    expect(agent).toBeDefined();
+    expect(agent?.userId).toBe("emp001");
+  });
+
+  it("resolveAgent returns agent by agentId", async () => {
+    await service.load();
+    await service.addAgent({
+      agentId: "agent_emp001",
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/path/to/workspace",
+      agentDirPath: "/path/to/agent",
+    });
+
+    const agent = service.resolveAgent("agent_emp001");
+    expect(agent).toBeDefined();
+    expect(agent?.userId).toBe("emp001");
+    expect(agent?.workspacePath).toBe("/path/to/workspace");
+  });
+
+  it("resolveAgent returns null for unknown agentId", async () => {
+    await service.load();
+    const agent = service.resolveAgent("unknown_agent");
+    expect(agent).toBeNull();
+  });
 });

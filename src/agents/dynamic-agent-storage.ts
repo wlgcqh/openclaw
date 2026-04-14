@@ -113,4 +113,52 @@ export class DynamicAgentStorageService {
     await writeJsonFileAtomically(this.storagePath, storage);
     this.storage = storage;
   }
+
+  async addBinding(binding: DynamicBindingRecord): Promise<void> {
+    const storage = await this.load();
+    const existingIndex = storage.bindings.findIndex((b) => b.senderId === binding.senderId);
+    if (existingIndex >= 0) {
+      storage.bindings[existingIndex] = binding;
+    } else {
+      storage.bindings.push(binding);
+    }
+    await this.save(storage);
+  }
+
+  resolveBinding(senderId: string): DynamicBindingRecord | null {
+    if (!this.storage) {
+      return null;
+    }
+    return this.storage.bindings.find((b) => b.senderId === senderId) ?? null;
+  }
+
+  async removeBinding(senderId: string): Promise<DynamicBindingRecord | null> {
+    const storage = await this.load();
+    const index = storage.bindings.findIndex((b) => b.senderId === senderId);
+    if (index < 0) {
+      return null;
+    }
+    const removed = storage.bindings[index];
+    storage.bindings.splice(index, 1);
+    await this.save(storage);
+    return removed;
+  }
+
+  async addAgent(agent: DynamicAgentRecord): Promise<void> {
+    const storage = await this.load();
+    const existingIndex = storage.agents.findIndex((a) => a.agentId === agent.agentId);
+    if (existingIndex >= 0) {
+      storage.agents[existingIndex] = agent;
+    } else {
+      storage.agents.push(agent);
+    }
+    await this.save(storage);
+  }
+
+  resolveAgent(agentId: string): DynamicAgentRecord | null {
+    if (!this.storage) {
+      return null;
+    }
+    return this.storage.agents.find((a) => a.agentId === agentId) ?? null;
+  }
 }
