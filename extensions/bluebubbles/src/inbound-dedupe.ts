@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { type ClaimableDedupe, createClaimableDedupe } from "openclaw/plugin-sdk/persistent-dedupe";
+import type { NormalizedWebhookMessage } from "./monitor-normalize.js";
 
 // BlueBubbles has no sequence/ack in its webhook protocol, and its
 // MessagePoller replays its ~1-week lookback window as `new-message` events
@@ -60,6 +61,30 @@ function sanitizeGuid(guid: string | undefined | null): string | null {
     return null;
   }
   return trimmed;
+}
+
+/**
+ * Resolve the canonical dedupe key for a BlueBubbles inbound message.
+ *
+ * Mirrors `monitor-debounce.ts`'s `buildKey`: BlueBubbles sends URL-preview
+ * / sticker "balloon" events with a different `messageId` than the text
+ * message they belong to. When `balloonBundleId` + `associatedMessageGuid`
+ * are present, we dedupe against the underlying message GUID so balloon-first
+ * vs text-first delivery order can't produce two distinct dedupe keys for
+ * the same logical message (review thread `rkzI` on #66230).
+ */
+export function resolveBlueBubblesInboundDedupeKey(
+  message: Pick<
+    NormalizedWebhookMessage,
+    "messageId" | "balloonBundleId" | "associatedMessageGuid"
+  >,
+): string | undefined {
+  const balloonBundleId = message.balloonBundleId?.trim();
+  const associatedMessageGuid = message.associatedMessageGuid?.trim();
+  if (balloonBundleId && associatedMessageGuid) {
+    return associatedMessageGuid;
+  }
+  return message.messageId?.trim() || undefined;
 }
 
 export type InboundDedupeClaim =
