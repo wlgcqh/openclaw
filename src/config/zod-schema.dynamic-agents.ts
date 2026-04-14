@@ -20,8 +20,8 @@ export const DynamicAgentTemplateConfigSchema = z
     agentDirTemplate: z.string().optional(),
     model: AgentModelSchema.optional(),
     thinkingDefault: ThinkingLevelSchema.optional(),
-    tools: AgentToolsSchema,
-    sandbox: AgentSandboxSchema,
+    tools: AgentToolsSchema.optional(),
+    sandbox: AgentSandboxSchema.optional(),
   })
   .strict()
   .optional();
