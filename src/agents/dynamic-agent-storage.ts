@@ -3,7 +3,10 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { z } from "zod";
 import { resolveStateDir } from "../config/paths.js";
+import { writeJsonFileAtomically } from "../plugin-sdk/json-store.js";
+import { safeParseJsonWithSchema } from "../utils/zod-parse.js";
 
 export type DynamicBindingRecord = {
   senderId: string; // Phone number, e.g., "+15551234567"
@@ -26,6 +29,28 @@ export type DynamicAgentStorage = {
   bindings: DynamicBindingRecord[];
   agents: DynamicAgentRecord[];
 };
+
+export const DynamicBindingRecordSchema = z.object({
+  senderId: z.string(),
+  userId: z.string(),
+  agentId: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number().optional(),
+}) as z.ZodType<DynamicBindingRecord>;
+
+export const DynamicAgentRecordSchema = z.object({
+  agentId: z.string(),
+  userId: z.string(),
+  createdAt: z.number(),
+  workspacePath: z.string(),
+  agentDirPath: z.string(),
+}) as z.ZodType<DynamicAgentRecord>;
+
+export const DynamicAgentStorageSchema = z.object({
+  version: z.string(),
+  bindings: z.array(DynamicBindingRecordSchema),
+  agents: z.array(DynamicAgentRecordSchema),
+}) as z.ZodType<DynamicAgentStorage>;
 
 export const STORAGE_VERSION = "1.0";
 export const DEFAULT_STORAGE_PATH = "dynamic_agents.json";
@@ -54,9 +79,20 @@ export class DynamicAgentStorageService {
 
     try {
       const content = await fs.readFile(this.storagePath, "utf-8");
-      const parsed = JSON.parse(content) as DynamicAgentStorage;
-      this.storage = parsed;
-      return parsed;
+      const parsed = safeParseJsonWithSchema(DynamicAgentStorageSchema, content);
+      if (parsed) {
+        this.storage = parsed;
+        return parsed;
+      }
+      // Invalid JSON or schema validation failed - create default
+      const defaultStorage: DynamicAgentStorage = {
+        version: STORAGE_VERSION,
+        bindings: [],
+        agents: [],
+      };
+      this.storage = defaultStorage;
+      await this.save(defaultStorage);
+      return defaultStorage;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         // File doesn't exist, create default
@@ -74,8 +110,7 @@ export class DynamicAgentStorageService {
   }
 
   async save(storage: DynamicAgentStorage): Promise<void> {
-    const content = JSON.stringify(storage, null, 2);
-    await fs.writeFile(this.storagePath, content, "utf-8");
+    await writeJsonFileAtomically(this.storagePath, storage);
     this.storage = storage;
   }
 }
