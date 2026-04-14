@@ -1316,13 +1316,13 @@ describe("dynamic binding routing", () => {
     expect(route.matchedBy).toBe("binding.peer");
   });
 
-  test("falls back to static binding when no dynamic binding exists", async () => {
+  test("returns unauthorized.dynamic when no dynamic binding exists for sender", async () => {
     const senderId = "+15551234567";
     const staticAgentId = "static-agent";
 
     // No dynamic binding added for this sender
 
-    // Configure static binding
+    // Configure static binding - this should NOT be used when dynamic binding is enabled
     const cfg: OpenClawConfig = {
       bindings: [
         {
@@ -1342,9 +1342,14 @@ describe("dynamic binding routing", () => {
       peer: { kind: "direct", id: senderId },
     });
 
-    // Static binding should win since no dynamic binding exists
-    expect(route.agentId).toBe(staticAgentId);
-    expect(route.matchedBy).toBe("binding.peer");
+    // Should return unauthorized since sender is not bound in dynamic storage
+    expect(route.matchedBy).toBe("unauthorized.dynamic");
+    expect(route.unauthorized).toEqual({
+      reason: "dynamic-binding-sender-not-bound",
+      senderId,
+    });
+    // AgentId should be default since no binding exists
+    expect(route.agentId).toBe("main");
   });
 
   test("does not use dynamic binding for non-direct peers", async () => {
@@ -1394,7 +1399,7 @@ describe("dynamic binding routing", () => {
     expect(route.matchedBy).toBe("binding.peer");
   });
 
-  test("falls back to default when dynamic binding exists but agent record missing", async () => {
+  test("returns unauthorized.dynamic when dynamic binding exists but agent record missing", async () => {
     const senderId = "+15551234567";
     const dynamicAgentId = "dynamic-agent-001";
 
@@ -1414,9 +1419,14 @@ describe("dynamic binding routing", () => {
       peer: { kind: "direct", id: senderId },
     });
 
-    // Should fall back to default since agent record is missing
+    // Should return unauthorized since agent record is missing (binding invalid)
+    expect(route.matchedBy).toBe("unauthorized.dynamic");
+    expect(route.unauthorized).toEqual({
+      reason: "dynamic-binding-sender-not-bound",
+      senderId,
+    });
+    // AgentId should be default since agent record is missing
     expect(route.agentId).toBe("main");
-    expect(route.matchedBy).toBe("default");
   });
 
   test("falls back to default when global storage service is not set", async () => {

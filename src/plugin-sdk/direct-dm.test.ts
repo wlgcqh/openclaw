@@ -4,6 +4,7 @@ import {
   createDirectDmPreCryptoGuardPolicy,
   createPreCryptoDirectDmAuthorizer,
   dispatchInboundDirectDmWithRuntime,
+  DirectDmUnauthorizedError,
   resolveInboundDirectDmAccessWithRuntime,
 } from "./direct-dm.js";
 
@@ -175,5 +176,97 @@ describe("plugin-sdk/direct-dm", () => {
     expect(recordInboundSession).toHaveBeenCalledTimes(1);
     expect(dispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(1);
     expect(deliver).toHaveBeenCalledWith({ text: "reply text" });
+  });
+
+  it("throws DirectDmUnauthorizedError when route is unauthorized.dynamic", async () => {
+    const recordInboundSession = vi.fn(async () => {});
+    const dispatchReplyWithBufferedBlockDispatcher = vi.fn();
+    const runtime = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(({ accountId, peer }) => ({
+            agentId: "main",
+            accountId,
+            sessionKey: `dm:${peer.id}`,
+            matchedBy: "unauthorized.dynamic",
+            unauthorized: {
+              reason: "dynamic-binding-sender-not-bound",
+              senderId: peer.id,
+            },
+          })),
+        },
+        session: {
+          resolveStorePath: vi.fn(() => "/tmp/direct-dm-session-store"),
+          readSessionUpdatedAt: vi.fn(() => 1234),
+          recordInboundSession,
+        },
+        reply: {
+          resolveEnvelopeFormatOptions: vi.fn(() => ({ mode: "agent" })),
+          formatAgentEnvelope: vi.fn(({ body }) => `env:${body}`),
+          finalizeInboundContext: vi.fn((ctx) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher,
+        },
+      },
+    } as never;
+
+    const deliver = vi.fn(async () => {});
+
+    await expect(
+      dispatchInboundDirectDmWithRuntime({
+        cfg: {
+          session: { store: { type: "jsonl" } },
+        } as never,
+        runtime,
+        channel: "nostr",
+        channelLabel: "Nostr",
+        accountId: "default",
+        peer: { kind: "direct", id: "unbound-sender" },
+        senderId: "unbound-sender",
+        senderAddress: "nostr:unbound-sender",
+        recipientAddress: "nostr:bot-1",
+        conversationLabel: "unbound-sender",
+        rawBody: "hello world",
+        messageId: "event-123",
+        timestamp: 1_710_000_000_000,
+        commandAuthorized: true,
+        deliver,
+        onRecordError: () => {},
+        onDispatchError: () => {},
+      }),
+    ).rejects.toThrow(DirectDmUnauthorizedError);
+
+    await expect(
+      dispatchInboundDirectDmWithRuntime({
+        cfg: {
+          session: { store: { type: "jsonl" } },
+        } as never,
+        runtime,
+        channel: "nostr",
+        channelLabel: "Nostr",
+        accountId: "default",
+        peer: { kind: "direct", id: "unbound-sender" },
+        senderId: "unbound-sender",
+        senderAddress: "nostr:unbound-sender",
+        recipientAddress: "nostr:bot-1",
+        conversationLabel: "unbound-sender",
+        rawBody: "hello world",
+        messageId: "event-123",
+        timestamp: 1_710_000_000_000,
+        commandAuthorized: true,
+        deliver,
+        onRecordError: () => {},
+        onDispatchError: () => {},
+      }),
+    ).rejects.toMatchObject({
+      details: {
+        reason: "dynamic-binding-sender-not-bound",
+        senderId: "unbound-sender",
+      },
+    });
+
+    // Should not dispatch or record when unauthorized
+    expect(recordInboundSession).not.toHaveBeenCalled();
+    expect(dispatchReplyWithBufferedBlockDispatcher).not.toHaveBeenCalled();
+    expect(deliver).not.toHaveBeenCalled();
   });
 });

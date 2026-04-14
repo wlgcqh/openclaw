@@ -6,6 +6,7 @@ export {
 export {
   createDirectDmPreCryptoGuardPolicy,
   dispatchInboundDirectDmWithRuntime,
+  DirectDmUnauthorizedError,
   type DirectDmPreCryptoGuardPolicy,
   type DirectDmPreCryptoGuardPolicyOverrides,
 } from "./direct-dm.js";

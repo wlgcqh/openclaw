@@ -190,7 +190,25 @@ type DirectDmRoute = {
   agentId: string;
   sessionKey: string;
   accountId?: string;
+  matchedBy?: string;
+  unauthorized?: {
+    reason: "dynamic-binding-sender-not-bound";
+    senderId: string;
+  };
 };
+
+/** Error thrown when a direct message sender is not authorized due to dynamic binding policy. */
+export class DirectDmUnauthorizedError extends Error {
+  constructor(
+    public readonly details: {
+      reason: "dynamic-binding-sender-not-bound";
+      senderId: string;
+    },
+  ) {
+    super(`Unauthorized: sender ${details.senderId} is not bound to any agent`);
+    this.name = "DirectDmUnauthorizedError";
+  }
+}
 
 type DirectDmRuntime = {
   channel: {
@@ -260,6 +278,11 @@ export async function dispatchInboundDirectDmWithRuntime(params: {
     runtime: params.runtime.channel,
     sessionStore: params.cfg.session?.store,
   });
+
+  // Check for unauthorized dynamic binding - sender not bound to any agent
+  if (route.matchedBy === "unauthorized.dynamic" && route.unauthorized) {
+    throw new DirectDmUnauthorizedError(route.unauthorized);
+  }
 
   const { storePath, body } = buildEnvelope({
     channel: params.channelLabel,

@@ -60,7 +60,13 @@ export type ResolvedAgentRoute = {
     | "binding.team"
     | "binding.account"
     | "binding.channel"
-    | "default";
+    | "default"
+    | "unauthorized.dynamic";
+  /** Unauthorized details when matchedBy is unauthorized.* */
+  unauthorized?: {
+    reason: "dynamic-binding-sender-not-bound";
+    senderId: string;
+  };
 };
 
 export { DEFAULT_ACCOUNT_ID, DEFAULT_AGENT_ID } from "./session-key.js";
@@ -716,6 +722,9 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
 
   // Dynamic binding check: for direct peers, check dynamic bindings first
   // Dynamic bindings have priority over static config bindings
+  // When dynamic binding is enabled and storage service is available:
+  // - If sender is bound and agent exists -> route to that agent
+  // - If sender is NOT bound -> return UNAUTHORIZED (sender must be bound)
   if (isDynamicBindingEnabled() && peer && peer.kind === "direct" && peer.id) {
     const storageService = getGlobalDynamicAgentStorageService();
     if (storageService) {
@@ -726,7 +735,25 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
           // Route to the dynamically bound agent
           return choose(dynamicBinding.agentId, "binding.dynamic");
         }
+        // Binding exists but agent record missing - treat as unbound
+        // Return UNAUTHORIZED - sender needs to re-register
+        return {
+          ...choose(resolveDefaultAgentId(input.cfg), "unauthorized.dynamic"),
+          unauthorized: {
+            reason: "dynamic-binding-sender-not-bound",
+            senderId: peer.id,
+          },
+        };
       }
+      // No binding found for sender - return UNAUTHORIZED
+      // In dynamic binding mode, all direct message senders must be bound
+      return {
+        ...choose(resolveDefaultAgentId(input.cfg), "unauthorized.dynamic"),
+        unauthorized: {
+          reason: "dynamic-binding-sender-not-bound",
+          senderId: peer.id,
+        },
+      };
     }
   }
 
