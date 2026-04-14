@@ -492,6 +492,34 @@ export const FIELD_HELP: Record<string, string> = {
   "bindings[].acp.cwd": "Working directory override for ACP sessions created from this binding.",
   "bindings[].acp.backend":
     "ACP backend override for this binding (falls back to agent runtime ACP backend, then global acp.backend).",
+  dynamicAgents:
+    "Dynamic multi-tenant agent allocation settings for automatic agent creation when new users authenticate. Enable this for deployments where each user needs their own isolated agent without pre-configured bindings.",
+  "dynamicAgents.enabled":
+    "Master toggle for the dynamic agent allocation system. When enabled, unbound sender IDs trigger UNAUTHORIZED responses and the HTTP API can create new agents/bindings dynamically.",
+  "dynamicAgents.template":
+    "Template configuration applied to newly created dynamic agents. Use this to customize workspace paths, model settings, and tool policies for per-user agents.",
+  "dynamicAgents.template.inheritDefaults":
+    "When true, dynamic agents inherit settings from agents.defaults before applying template overrides. Keep enabled to avoid duplicating common agent configuration.",
+  "dynamicAgents.template.workspaceTemplate":
+    "Path template for dynamic agent workspaces, with {agentId} placeholder. Default: ~/.openclaw/workspace-{agentId}. Each user gets an isolated workspace directory.",
+  "dynamicAgents.template.agentDirTemplate":
+    "Path template for dynamic agent directories, with {agentId} placeholder. Default: ~/.openclaw/agents/{agentId}/agent. Controls where agent state and configs are stored.",
+  "dynamicAgents.template.model":
+    "Model configuration override for dynamic agents. Use this to specify model ID and fallbacks for per-user agents.",
+  "dynamicAgents.template.thinkingDefault":
+    "Thinking level default for dynamic agents (off, minimal, low, medium, high, xhigh, adaptive). Use lower levels for faster response times.",
+  "dynamicAgents.template.tools":
+    "Tool policy for dynamic agents. Specify allow/deny lists to control which tools each user agent can access.",
+  "dynamicAgents.template.sandbox":
+    "Sandbox configuration for dynamic agents. Use this to restrict file system access or network capabilities for per-user agents.",
+  "dynamicAgents.storage":
+    "Storage settings for the dynamic bindings database file that maps sender IDs to agents.",
+  "dynamicAgents.storage.path":
+    "Custom path for the dynamic_agents.json storage file. Default: ~/.openclaw/dynamic_agents.json. Change this only if you need a different state directory.",
+  "dynamicAgents.api":
+    "HTTP API settings for the dynamic agent provisioning endpoints used by authentication services.",
+  "dynamicAgents.api.authToken":
+    "Authentication token required for calls to the /api/dynamic endpoints. Keep this secret and rotate regularly for security.",
   broadcast:
     "Broadcast routing map for sending the same outbound message to multiple peer IDs per source conversation. Keep this minimal and audited because one source can fan out to many destinations.",
   "broadcast.strategy":
