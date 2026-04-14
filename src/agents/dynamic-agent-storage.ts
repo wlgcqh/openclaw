@@ -132,6 +132,17 @@ export class DynamicAgentStorageService {
     return this.storage.bindings.find((b) => b.senderId === senderId) ?? null;
   }
 
+  resolveBindingByUserId(userId: string): DynamicBindingRecord | null {
+    if (!this.storage) {
+      return null;
+    }
+    return this.storage.bindings.find((b) => b.userId === userId) ?? null;
+  }
+
+  listBindings(): DynamicBindingRecord[] {
+    return this.storage?.bindings ?? [];
+  }
+
   async removeBinding(senderId: string): Promise<DynamicBindingRecord | null> {
     const storage = await this.load();
     const index = storage.bindings.findIndex((b) => b.senderId === senderId);

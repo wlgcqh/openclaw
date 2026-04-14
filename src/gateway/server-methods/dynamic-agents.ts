@@ -6,14 +6,20 @@ import { DynamicAgentStorageService } from "../../agents/dynamic-agent-storage.j
 import { ErrorCodes, errorShape } from "../protocol/index.js";
 import type { GatewayRequestHandlers } from "./types.js";
 
-// E.164 format validation: must start with + and have at least 3 more characters
+// SenderId validation: must be a non-empty string
+// Supports various formats:
+// - E.164 phone number: +15551234567
+// - Telegram/Discord numeric ID: 123456789
+// - Feishu/Slack openId: ou_sender_1, U123
+// - Generic string ID: any non-empty string
 function validateSenderId(senderId: string): boolean {
-  if (!senderId.startsWith("+")) {
+  // Must be a non-empty string
+  if (!senderId || typeof senderId !== "string" || !senderId.trim()) {
     return false;
   }
-  // After the +, we need at least 3 digits (minimum valid E.164 is +123)
-  const afterPlus = senderId.slice(1);
-  return afterPlus.length >= 3 && /^\d+$/.test(afterPlus);
+  // Allow any non-empty string as senderId
+  // Different channels have different ID formats
+  return true;
 }
 
 export type BindUserRequest = {
@@ -93,14 +99,7 @@ export const dynamicAgentHandlers: GatewayRequestHandlers = {
 
     // Validate senderId
     if (!p.senderId || !validateSenderId(p.senderId)) {
-      respond(
-        false,
-        undefined,
-        errorShape(
-          ErrorCodes.INVALID_REQUEST,
-          "senderId must be in E.164 format (e.g., +15551234567)",
-        ),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "senderId is required"));
       return;
     }
 
@@ -198,14 +197,7 @@ export const dynamicAgentHandlers: GatewayRequestHandlers = {
 
     // Validate senderId
     if (!p.senderId || !validateSenderId(p.senderId)) {
-      respond(
-        false,
-        undefined,
-        errorShape(
-          ErrorCodes.INVALID_REQUEST,
-          "senderId must be in E.164 format (e.g., +15551234567)",
-        ),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "senderId is required"));
       return;
     }
 
@@ -245,14 +237,7 @@ export const dynamicAgentHandlers: GatewayRequestHandlers = {
 
     // Validate senderId
     if (!p.senderId || !validateSenderId(p.senderId)) {
-      respond(
-        false,
-        undefined,
-        errorShape(
-          ErrorCodes.INVALID_REQUEST,
-          "senderId must be in E.164 format (e.g., +15551234567)",
-        ),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "senderId is required"));
       return;
     }
 

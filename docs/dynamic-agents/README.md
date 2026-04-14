@@ -183,7 +183,25 @@ pnpm test src/agents/dynamic-agent-storage.test.ts --run
 pnpm test src/routing/resolve-route.test.ts -t "dynamic binding" --run
 ```
 
-### 方法三: 通过WebSocket连接测试
+### 方法三: 使用网页客户端测试
+
+打开网页客户端进行实时对话测试:
+
+```bash
+# 先绑定用户
+openclaw gateway call dynamic.bindUser --params '{"senderId":"+15551001001","userId":"zhangsan"}' --json
+
+# 打开网页客户端
+open docs/dynamic-agents/webchat-client.html
+```
+
+网页客户端流程:
+
+1. 输入用户名 (如 `zhangsan`)
+2. 点击"开始对话" - 系统自动映射到对应 agent
+3. 开始对话 - 每个用户使用独立的 agent
+
+### 方法四: 通过Gateway CLI测试
 
 Gateway监听端口18789（默认），可以通过WebSocket连接调用:
 
@@ -208,24 +226,23 @@ ls -la ~/.openclaw/agents/
 ls -la ~/.openclaw/workspace-*
 ```
 
-## E.164 格式说明
+## senderId 格式说明
 
-senderId必须是有效的E.164电话号码格式:
+senderId 支持多种格式:
 
-- 必须以 `+` 开头
-- `+` 后至少3位数字
-- 例如: `+15551234567`, `+8613800138000`
+- E.164 电话号码: `+15551234567`
+- Telegram/Discord 数字ID: `123456789`
+- Feishu/Slack openId: `ou_sender_1`, `U123`
+- 任意非空字符串
 
-无效格式会返回错误:
+绑定请求示例:
 
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_REQUEST",
-    "message": "senderId must be in E.164 format (e.g., +15551234567)"
-  }
-}
+```bash
+# 电话号码
+openclaw gateway call dynamic.bindUser --params '{"senderId":"+15551001001","userId":"zhangsan"}'
+
+# 用户ID
+openclaw gateway call dynamic.bindUser --params '{"senderId":"user_123","userId":"emp001"}'
 ```
 
 ## 账号切换

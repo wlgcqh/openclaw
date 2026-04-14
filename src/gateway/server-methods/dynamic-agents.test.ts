@@ -68,9 +68,9 @@ describe("dynamicAgentHandlers", () => {
   });
 
   describe("dynamic.bindUser", () => {
-    it("validates senderId E.164 format (must start with +)", async () => {
+    it("validates senderId (must be non-empty string)", async () => {
       const opts = createOptions("dynamic.bindUser", {
-        senderId: "15551234567", // Missing +
+        senderId: "",
         userId: "emp001",
       });
       await dynamicAgentHandlers["dynamic.bindUser"](opts);
@@ -80,25 +80,53 @@ describe("dynamicAgentHandlers", () => {
         undefined,
         expect.objectContaining({
           code: "INVALID_REQUEST",
-          message: expect.stringContaining("senderId must be in E.164 format"),
+          message: expect.stringContaining("senderId is required"),
         }),
       );
     });
 
-    it("validates senderId E.164 format (must have at least 3 chars after +)", async () => {
-      const opts = createOptions("dynamic.bindUser", {
-        senderId: "+1", // Too short
+    it("accepts various senderId formats (E.164, numeric, openId)", async () => {
+      provisionDynamicAgentMock.mockResolvedValue({
+        agentId: "agent_emp001",
+        workspacePath: "/path/to/workspace",
+        agentDirPath: "/path/to/agent",
+        isNew: true,
+      });
+
+      // Test E.164 format
+      const opts1 = createOptions("dynamic.bindUser", {
+        senderId: "+15551234567",
         userId: "emp001",
       });
-      await dynamicAgentHandlers["dynamic.bindUser"](opts);
-
-      expect(opts.respond).toHaveBeenCalledWith(
-        false,
+      await dynamicAgentHandlers["dynamic.bindUser"](opts1);
+      expect(opts1.respond).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ success: true }),
         undefined,
-        expect.objectContaining({
-          code: "INVALID_REQUEST",
-          message: expect.stringContaining("senderId must be in E.164 format"),
-        }),
+      );
+
+      // Test Telegram numeric ID
+      const opts2 = createOptions("dynamic.bindUser", {
+        senderId: "123456789",
+        userId: "emp002",
+      });
+      await dynamicAgentHandlers["dynamic.bindUser"](opts2);
+      expect(opts2.respond).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ success: true }),
+        undefined,
+      );
+
+      // Test Feishu openId
+      const opts3 = createOptions("dynamic.bindUser", {
+        senderId: "ou_sender_123",
+        userId: "emp003",
+      });
+      await dynamicAgentHandlers["dynamic.bindUser"](opts3);
+      expect(opts3.respond).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ success: true }),
+        undefined,
       );
     });
 
@@ -277,9 +305,9 @@ describe("dynamicAgentHandlers", () => {
   });
 
   describe("dynamic.unbindUser", () => {
-    it("validates senderId E.164 format", async () => {
+    it("validates senderId (must be non-empty)", async () => {
       const opts = createOptions("dynamic.unbindUser", {
-        senderId: "15551234567", // Missing +
+        senderId: "",
       });
       await dynamicAgentHandlers["dynamic.unbindUser"](opts);
 
@@ -288,7 +316,7 @@ describe("dynamicAgentHandlers", () => {
         undefined,
         expect.objectContaining({
           code: "INVALID_REQUEST",
-          message: expect.stringContaining("senderId must be in E.164 format"),
+          message: expect.stringContaining("senderId is required"),
         }),
       );
     });
@@ -362,9 +390,9 @@ describe("dynamicAgentHandlers", () => {
   });
 
   describe("dynamic.status", () => {
-    it("validates senderId E.164 format", async () => {
+    it("validates senderId (must be non-empty)", async () => {
       const opts = createOptions("dynamic.status", {
-        senderId: "invalid",
+        senderId: "",
       });
       await dynamicAgentHandlers["dynamic.status"](opts);
 
@@ -373,7 +401,7 @@ describe("dynamicAgentHandlers", () => {
         undefined,
         expect.objectContaining({
           code: "INVALID_REQUEST",
-          message: expect.stringContaining("senderId must be in E.164 format"),
+          message: expect.stringContaining("senderId is required"),
         }),
       );
     });

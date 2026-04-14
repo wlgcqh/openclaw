@@ -65,6 +65,8 @@ export const ConnectParamsSchema = Type.Object(
     ),
     locale: Type.Optional(Type.String()),
     userAgent: Type.Optional(Type.String()),
+    // Dynamic agent binding: userId for automatic agent assignment
+    userId: Type.Optional(NonEmptyString),
   },
   { additionalProperties: false },
 );
@@ -121,6 +123,8 @@ export const HelloOkSchema = Type.Object(
       },
       { additionalProperties: false },
     ),
+    // Dynamic agent: agentId for this user (if userId was provided in connect)
+    agentId: Type.Optional(NonEmptyString),
   },
   { additionalProperties: false },
 );

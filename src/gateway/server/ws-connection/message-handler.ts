@@ -1,6 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import type { WebSocket } from "ws";
+import { getGlobalDynamicAgentStorageService } from "../../../agents/dynamic-agent-storage.js";
 import { loadConfig } from "../../../config/config.js";
 import {
   getBoundDeviceBootstrapProfile,
@@ -35,6 +36,7 @@ import { upsertPresence } from "../../../infra/system-presence.js";
 import { loadVoiceWakeConfig } from "../../../infra/voicewake.js";
 import { rawDataToString } from "../../../infra/ws.js";
 import type { createSubsystemLogger } from "../../../logging/subsystem.js";
+import { isDynamicBindingEnabled } from "../../../routing/dynamic-binding-resolver.js";
 import {
   resolveBootstrapProfileScopesForRole,
   type DeviceBootstrapProfile,
@@ -1217,6 +1219,27 @@ export function attachGatewayWsMessageHandler(params: {
           canvasHostUrl && canvasCapability
             ? (buildCanvasScopedHostUrl(canvasHostUrl, canvasCapability) ?? canvasHostUrl)
             : canvasHostUrl;
+
+        // Dynamic agent binding: resolve agentId from userId
+        let dynamicAgentId: string | undefined;
+        if (isDynamicBindingEnabled()) {
+          const userId = connectParams.userId?.trim();
+          if (userId) {
+            const storageService = getGlobalDynamicAgentStorageService();
+            if (storageService) {
+              const binding = storageService.resolveBindingByUserId(userId);
+              if (binding) {
+                dynamicAgentId = binding.agentId;
+                logGateway.info(
+                  `dynamic agent resolved: userId=${userId} -> agentId=${dynamicAgentId}`,
+                );
+              } else {
+                logGateway.info(`dynamic agent: no binding found for userId=${userId}`);
+              }
+            }
+          }
+        }
+
         const helloOk = {
           type: "hello-ok",
           protocol: PROTOCOL_VERSION,
@@ -1243,6 +1266,7 @@ export function attachGatewayWsMessageHandler(params: {
             maxBufferedBytes: MAX_BUFFERED_BYTES,
             tickIntervalMs: TICK_INTERVAL_MS,
           },
+          ...(dynamicAgentId ? { agentId: dynamicAgentId } : {}),
         };
 
         clearHandshakeTimer();
