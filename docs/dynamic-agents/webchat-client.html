@@ -241,6 +241,7 @@
     let ws = null;
     let userId = null;
     let agentId = null;
+    let sessionKey = null;  // 当前用户的 sessionKey，用于过滤事件
     let gatewayUrl = null;
     let requestId = 1;
     let pendingRequests = {};
@@ -309,6 +310,7 @@
               // Check if we got an agentId
               if (helloOk.agentId) {
                 agentId = helloOk.agentId;
+                sessionKey = `agent:${agentId}:dm:${userId}`;  // 保存 sessionKey 用于事件过滤
               } else {
                 // No dynamic binding found - user needs to be registered first
                 reject(new Error('用户未注册，请先通过 API 绑定 (dynamic.bindUser)'));
@@ -399,9 +401,17 @@
 
     // Handle event
     function handleEvent(data) {
+      // Filter events by sessionKey to avoid receiving other users' messages
+      const payload = data.payload;
+      const eventSessionKey = payload?.sessionKey;
+
+      // Skip events that don't belong to this user's session
+      if (sessionKey && eventSessionKey && eventSessionKey !== sessionKey) {
+        return;
+      }
+
       // Handle agent streaming events
       if (data.event === 'agent') {
-        const payload = data.payload;
         if (payload?.stream === 'assistant' && payload?.data) {
           let text = '';
           if (typeof payload.data === 'string') {
@@ -420,7 +430,6 @@
 
       // Handle chat events (final reply)
       if (data.event === 'chat') {
-        const payload = data.payload;
         if (payload?.state === 'final' && payload?.message) {
           hideThinking();
           const msg = payload.message;
@@ -470,8 +479,6 @@
       showThinking();
 
       try {
-        const sessionKey = `agent:${agentId}:dm:${userId}`;
-
         const response = await sendRequest('chat.send', {
           sessionKey: sessionKey,
           message: message,
