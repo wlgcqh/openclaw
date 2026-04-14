@@ -17,6 +17,10 @@ const hoisted = vi.hoisted(() => {
     resolved: 0,
     failed: 0,
   }));
+  const initializeGlobalDynamicAgentStorage = vi.fn(() => ({
+    load: vi.fn(async () => ({ version: "1.0", bindings: [], agents: [] })),
+  }));
+  const setDynamicBindingOptions = vi.fn();
   return {
     startPluginServices,
     startGmailWatcherWithLogs,
@@ -30,6 +34,8 @@ const hoisted = vi.hoisted(() => {
     shouldWakeFromRestartSentinel,
     scheduleRestartSentinelWake,
     reconcilePendingSessionIdentities,
+    initializeGlobalDynamicAgentStorage,
+    setDynamicBindingOptions,
   };
 });
 
@@ -105,6 +111,14 @@ vi.mock("./server-tailscale.js", () => ({
   startGatewayTailscaleExposure: hoisted.startGatewayTailscaleExposure,
 }));
 
+vi.mock("../agents/dynamic-agent-storage.js", () => ({
+  initializeGlobalDynamicAgentStorage: hoisted.initializeGlobalDynamicAgentStorage,
+}));
+
+vi.mock("../routing/dynamic-binding-resolver.js", () => ({
+  setDynamicBindingOptions: hoisted.setDynamicBindingOptions,
+}));
+
 const { startGatewayPostAttachRuntime } = await import("./server-startup-post-attach.js");
 
 describe("startGatewayPostAttachRuntime", () => {
@@ -121,6 +135,8 @@ describe("startGatewayPostAttachRuntime", () => {
     hoisted.shouldWakeFromRestartSentinel.mockReturnValue(false);
     hoisted.scheduleRestartSentinelWake.mockClear();
     hoisted.reconcilePendingSessionIdentities.mockClear();
+    hoisted.initializeGlobalDynamicAgentStorage.mockClear();
+    hoisted.setDynamicBindingOptions.mockClear();
   });
 
   it("re-enables startup-gated methods after post-attach sidecars start", async () => {
@@ -174,5 +190,260 @@ describe("startGatewayPostAttachRuntime", () => {
     expect(hoisted.logGatewayStartup).toHaveBeenCalledWith(
       expect.objectContaining({ loadedPluginIds: ["beta", "alpha"] }),
     );
+  });
+});
+
+describe("dynamic agent storage initialization", () => {
+  beforeEach(() => {
+    hoisted.startPluginServices.mockClear();
+    hoisted.startGmailWatcherWithLogs.mockClear();
+    hoisted.loadInternalHooks.mockClear();
+    hoisted.setInternalHooksEnabled.mockClear();
+    hoisted.startGatewayMemoryBackend.mockClear();
+    hoisted.scheduleGatewayUpdateCheck.mockClear();
+    hoisted.startGatewayTailscaleExposure.mockClear();
+    hoisted.logGatewayStartup.mockClear();
+    hoisted.scheduleSubagentOrphanRecovery.mockClear();
+    hoisted.shouldWakeFromRestartSentinel.mockReturnValue(false);
+    hoisted.scheduleRestartSentinelWake.mockClear();
+    hoisted.reconcilePendingSessionIdentities.mockClear();
+    hoisted.initializeGlobalDynamicAgentStorage.mockClear();
+    hoisted.setDynamicBindingOptions.mockClear();
+  });
+
+  it("initializes dynamic agent storage when dynamicAgents.enabled is true", async () => {
+    const unavailableGatewayMethods = new Set<string>(["chat.history"]);
+
+    await startGatewayPostAttachRuntime({
+      minimalTestGateway: false,
+      cfgAtStart: { hooks: { internal: { enabled: false } } } as never,
+      bindHost: "127.0.0.1",
+      bindHosts: ["127.0.0.1"],
+      port: 18789,
+      tlsEnabled: false,
+      log: { info: vi.fn(), warn: vi.fn() },
+      isNixMode: false,
+      broadcast: vi.fn(),
+      tailscaleMode: "off",
+      resetOnExit: false,
+      controlUiBasePath: "/",
+      logTailscale: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      gatewayPluginConfigAtStart: {
+        hooks: { internal: { enabled: false } },
+        dynamicAgents: { enabled: true },
+      } as never,
+      pluginRegistry: { plugins: [] } as never,
+      defaultWorkspaceDir: "/tmp/openclaw-workspace",
+      deps: {} as never,
+      startChannels: vi.fn(async () => undefined),
+      logHooks: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      logChannels: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+      unavailableGatewayMethods,
+    });
+
+    expect(hoisted.initializeGlobalDynamicAgentStorage).toHaveBeenCalledWith({});
+    expect(hoisted.setDynamicBindingOptions).toHaveBeenCalledWith({ enabled: true });
+  });
+
+  it("passes custom storage path when configured", async () => {
+    const unavailableGatewayMethods = new Set<string>(["chat.history"]);
+
+    await startGatewayPostAttachRuntime({
+      minimalTestGateway: false,
+      cfgAtStart: { hooks: { internal: { enabled: false } } } as never,
+      bindHost: "127.0.0.1",
+      bindHosts: ["127.0.0.1"],
+      port: 18789,
+      tlsEnabled: false,
+      log: { info: vi.fn(), warn: vi.fn() },
+      isNixMode: false,
+      broadcast: vi.fn(),
+      tailscaleMode: "off",
+      resetOnExit: false,
+      controlUiBasePath: "/",
+      logTailscale: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      gatewayPluginConfigAtStart: {
+        hooks: { internal: { enabled: false } },
+        dynamicAgents: {
+          enabled: true,
+          storage: { path: "/custom/path/dynamic_agents.json" },
+        },
+      } as never,
+      pluginRegistry: { plugins: [] } as never,
+      defaultWorkspaceDir: "/tmp/openclaw-workspace",
+      deps: {} as never,
+      startChannels: vi.fn(async () => undefined),
+      logHooks: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      logChannels: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+      unavailableGatewayMethods,
+    });
+
+    expect(hoisted.initializeGlobalDynamicAgentStorage).toHaveBeenCalledWith({
+      storagePath: "/custom/path/dynamic_agents.json",
+    });
+    expect(hoisted.setDynamicBindingOptions).toHaveBeenCalledWith({ enabled: true });
+  });
+
+  it("does not initialize storage when dynamicAgents.enabled is false", async () => {
+    const unavailableGatewayMethods = new Set<string>(["chat.history"]);
+
+    await startGatewayPostAttachRuntime({
+      minimalTestGateway: false,
+      cfgAtStart: { hooks: { internal: { enabled: false } } } as never,
+      bindHost: "127.0.0.1",
+      bindHosts: ["127.0.0.1"],
+      port: 18789,
+      tlsEnabled: false,
+      log: { info: vi.fn(), warn: vi.fn() },
+      isNixMode: false,
+      broadcast: vi.fn(),
+      tailscaleMode: "off",
+      resetOnExit: false,
+      controlUiBasePath: "/",
+      logTailscale: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      gatewayPluginConfigAtStart: {
+        hooks: { internal: { enabled: false } },
+        dynamicAgents: { enabled: false },
+      } as never,
+      pluginRegistry: { plugins: [] } as never,
+      defaultWorkspaceDir: "/tmp/openclaw-workspace",
+      deps: {} as never,
+      startChannels: vi.fn(async () => undefined),
+      logHooks: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      logChannels: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+      unavailableGatewayMethods,
+    });
+
+    expect(hoisted.initializeGlobalDynamicAgentStorage).not.toHaveBeenCalled();
+    expect(hoisted.setDynamicBindingOptions).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it("does not initialize storage when dynamicAgents is not configured", async () => {
+    const unavailableGatewayMethods = new Set<string>(["chat.history"]);
+
+    await startGatewayPostAttachRuntime({
+      minimalTestGateway: false,
+      cfgAtStart: { hooks: { internal: { enabled: false } } } as never,
+      bindHost: "127.0.0.1",
+      bindHosts: ["127.0.0.1"],
+      port: 18789,
+      tlsEnabled: false,
+      log: { info: vi.fn(), warn: vi.fn() },
+      isNixMode: false,
+      broadcast: vi.fn(),
+      tailscaleMode: "off",
+      resetOnExit: false,
+      controlUiBasePath: "/",
+      logTailscale: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      gatewayPluginConfigAtStart: {
+        hooks: { internal: { enabled: false } },
+      } as never,
+      pluginRegistry: { plugins: [] } as never,
+      defaultWorkspaceDir: "/tmp/openclaw-workspace",
+      deps: {} as never,
+      startChannels: vi.fn(async () => undefined),
+      logHooks: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      logChannels: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+      unavailableGatewayMethods,
+    });
+
+    expect(hoisted.initializeGlobalDynamicAgentStorage).not.toHaveBeenCalled();
+    expect(hoisted.setDynamicBindingOptions).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it("logs warning and continues when storage initialization fails", async () => {
+    const warnLog = vi.fn();
+    const unavailableGatewayMethods = new Set<string>(["chat.history"]);
+    hoisted.initializeGlobalDynamicAgentStorage.mockImplementation(() => {
+      throw new Error("storage init failed");
+    });
+
+    await startGatewayPostAttachRuntime({
+      minimalTestGateway: false,
+      cfgAtStart: { hooks: { internal: { enabled: false } } } as never,
+      bindHost: "127.0.0.1",
+      bindHosts: ["127.0.0.1"],
+      port: 18789,
+      tlsEnabled: false,
+      log: { info: vi.fn(), warn: warnLog },
+      isNixMode: false,
+      broadcast: vi.fn(),
+      tailscaleMode: "off",
+      resetOnExit: false,
+      controlUiBasePath: "/",
+      logTailscale: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      gatewayPluginConfigAtStart: {
+        hooks: { internal: { enabled: false } },
+        dynamicAgents: { enabled: true },
+      } as never,
+      pluginRegistry: { plugins: [] } as never,
+      defaultWorkspaceDir: "/tmp/openclaw-workspace",
+      deps: {} as never,
+      startChannels: vi.fn(async () => undefined),
+      logHooks: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      logChannels: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+      unavailableGatewayMethods,
+    });
+
+    expect(warnLog).toHaveBeenCalledWith(
+      expect.stringContaining("dynamic agent storage initialization failed"),
+    );
+    // Should still continue with other startup
+    expect(hoisted.startPluginServices).toHaveBeenCalledTimes(1);
   });
 });

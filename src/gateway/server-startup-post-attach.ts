@@ -2,6 +2,7 @@ import { getAcpSessionManager } from "../acp/control-plane/manager.js";
 import { ACP_SESSION_IDENTITY_RENDERER_VERSION } from "../acp/runtime/session-identifiers.js";
 import { resolveOpenClawAgentDir } from "../agents/agent-paths.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
+import { initializeGlobalDynamicAgentStorage } from "../agents/dynamic-agent-storage.js";
 import { selectAgentHarness } from "../agents/harness/selection.js";
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import {
@@ -33,6 +34,7 @@ import { scheduleGatewayUpdateCheck } from "../infra/update-startup.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import type { loadOpenClawPlugins } from "../plugins/loader.js";
 import { type PluginServicesHandle, startPluginServices } from "../plugins/services.js";
+import { setDynamicBindingOptions } from "../routing/dynamic-binding-resolver.js";
 import {
   GATEWAY_EVENT_UPDATE_AVAILABLE,
   type GatewayUpdateAvailableEventPayload,
@@ -115,6 +117,22 @@ export async function startGatewaySidecars(params: {
     }
   } catch (err) {
     params.log.warn(`session lock cleanup failed on startup: ${String(err)}`);
+  }
+
+  // Initialize dynamic agent storage if enabled
+  if (params.cfg.dynamicAgents?.enabled) {
+    try {
+      const storageOptions = {
+        storagePath: params.cfg.dynamicAgents?.storage?.path,
+      };
+      const storageService = initializeGlobalDynamicAgentStorage(storageOptions);
+      await storageService.load();
+      setDynamicBindingOptions({ enabled: true });
+    } catch (err) {
+      params.log.warn(`dynamic agent storage initialization failed: ${String(err)}`);
+    }
+  } else {
+    setDynamicBindingOptions({ enabled: false });
   }
 
   await startGmailWatcherWithLogs({
