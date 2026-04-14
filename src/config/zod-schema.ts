@@ -14,6 +14,7 @@ import {
   SecretInputSchema,
   SecretsConfigSchema,
 } from "./zod-schema.core.js";
+import { DynamicAgentsConfigSchema } from "./zod-schema.dynamic-agents.js";
 import { HookMappingSchema, HooksGmailSchema, InternalHooksSchema } from "./zod-schema.hooks.js";
 import { PluginInstallRecordShape } from "./zod-schema.installs.js";
 import { ChannelsSchema } from "./zod-schema.providers.js";
@@ -964,6 +965,7 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    dynamicAgents: DynamicAgentsConfigSchema,
   })
   .strict()
   .superRefine((cfg, ctx) => {

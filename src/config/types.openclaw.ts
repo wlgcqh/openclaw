@@ -7,6 +7,7 @@ import type { BrowserConfig } from "./types.browser.js";
 import type { ChannelsConfig } from "./types.channels.js";
 import type { CliConfig } from "./types.cli.js";
 import type { CronConfig } from "./types.cron.js";
+import type { DynamicAgentsConfig } from "./types.dynamic-agents.js";
 import type {
   CanvasHostConfig,
   DiscoveryConfig,
@@ -122,6 +123,7 @@ export type OpenClawConfig = {
   gateway?: GatewayConfig;
   memory?: MemoryConfig;
   mcp?: McpConfig;
+  dynamicAgents?: DynamicAgentsConfig;
 };
 
 declare const openClawConfigStateBrand: unique symbol;
