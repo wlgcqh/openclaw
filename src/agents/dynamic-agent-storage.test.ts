@@ -109,4 +109,63 @@ describe("DynamicAgentStorageService", () => {
     const agent = service.resolveAgent("unknown_agent");
     expect(agent).toBeNull();
   });
+
+  it("addBinding updates existing binding (upsert)", async () => {
+    await service.load();
+    await service.addBinding({
+      senderId: "+15551234567",
+      userId: "emp001",
+      agentId: "agent_emp001",
+      createdAt: Date.now(),
+    });
+
+    // Upsert with different userId
+    await service.addBinding({
+      senderId: "+15551234567",
+      userId: "emp002",
+      agentId: "agent_emp002",
+      createdAt: Date.now(),
+    });
+
+    const storage = await service.load();
+    expect(storage.bindings.length).toBe(1); // No duplicates
+    const binding = service.resolveBinding("+15551234567");
+    expect(binding?.userId).toBe("emp002"); // Updated
+  });
+
+  it("addAgent updates existing agent (upsert)", async () => {
+    await service.load();
+    await service.addAgent({
+      agentId: "agent_emp001",
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/old/workspace",
+      agentDirPath: "/old/agent",
+    });
+
+    await service.addAgent({
+      agentId: "agent_emp001",
+      userId: "emp001",
+      createdAt: Date.now(),
+      workspacePath: "/new/workspace",
+      agentDirPath: "/new/agent",
+    });
+
+    const storage = await service.load();
+    expect(storage.agents.length).toBe(1);
+    const agent = service.resolveAgent("agent_emp001");
+    expect(agent?.workspacePath).toBe("/new/workspace");
+  });
+
+  it("resolveBinding returns null before load is called", () => {
+    const newService = new DynamicAgentStorageService({ storagePath });
+    const binding = newService.resolveBinding("+15551234567");
+    expect(binding).toBeNull();
+  });
+
+  it("resolveAgent returns null before load is called", () => {
+    const newService = new DynamicAgentStorageService({ storagePath });
+    const agent = newService.resolveAgent("agent_emp001");
+    expect(agent).toBeNull();
+  });
 });
