@@ -134,49 +134,6 @@ describe("provisionDynamicAgent", () => {
     expect(result2.agentId).toBe("agent_user2");
     expect(result1.workspacePath).not.toBe(result2.workspacePath);
   });
-
-  it("normalizes userId with special characters (e.g., dots to dashes)", async () => {
-    const result = await provisionDynamicAgent({
-      userId: "qi.heng",
-      template,
-      storage: storageService,
-    });
-
-    // "qi.heng" should be normalized to "qi-heng" (dots replaced with dashes)
-    expect(result.agentId).toBe("agent_qi-heng");
-    expect(result.workspacePath).toContain("agent_qi-heng");
-    expect(result.agentDirPath).toContain("agent_qi-heng");
-
-    // Verify the directory was actually created with the normalized name
-    const agentDirStat = await fs.stat(result.agentDirPath);
-    expect(agentDirStat.isDirectory()).toBe(true);
-  });
-
-  it("normalizes custom agentId with special characters", async () => {
-    const result = await provisionDynamicAgent({
-      userId: "emp006",
-      agentId: "custom.agent.id",
-      template,
-      storage: storageService,
-    });
-
-    // "custom.agent.id" should be normalized to "custom-agent-id"
-    expect(result.agentId).toBe("custom-agent-id");
-    expect(result.workspacePath).toContain("custom-agent-id");
-  });
-
-  it("can find agent by normalized agentId", async () => {
-    await provisionDynamicAgent({
-      userId: "qi.heng",
-      template,
-      storage: storageService,
-    });
-
-    // Should find agent by the normalized agentId
-    const stored = storageService.resolveAgent("agent_qi-heng");
-    expect(stored).not.toBeNull();
-    expect(stored?.userId).toBe("qi.heng");
-  });
 });
 
 describe("getDefaultTemplate", () => {

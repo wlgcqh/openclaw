@@ -37,7 +37,6 @@ import { loadVoiceWakeConfig } from "../../../infra/voicewake.js";
 import { rawDataToString } from "../../../infra/ws.js";
 import type { createSubsystemLogger } from "../../../logging/subsystem.js";
 import { isDynamicBindingEnabled } from "../../../routing/dynamic-binding-resolver.js";
-import { normalizeAgentId } from "../../../routing/session-key.js";
 import {
   resolveBootstrapProfileScopesForRole,
   type DeviceBootstrapProfile,
@@ -1234,8 +1233,7 @@ export function attachGatewayWsMessageHandler(params: {
             if (storageService) {
               const binding = storageService.resolveBindingByUserId(userId);
               if (binding) {
-                // Normalize agentId for path/shell safety (e.g., "qi.heng" -> "qi-heng")
-                dynamicAgentId = normalizeAgentId(binding.agentId);
+                dynamicAgentId = binding.agentId;
                 logGateway.info(
                   `dynamic agent resolved: userId=${userId} -> agentId=${dynamicAgentId}`,
                 );
