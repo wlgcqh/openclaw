@@ -116,19 +116,23 @@ export const dynamicAgentHandlers: GatewayRequestHandlers = {
     const existingBinding = storage.resolveBinding(p.senderId);
     if (existingBinding) {
       if (existingBinding.userId === p.userId) {
-        // Already bound to same user - return existing binding info
-        const agentRecord = storage.resolveAgent(existingBinding.agentId);
+        // Already bound to same user - still provision to ensure directories exist
+        const template = getDefaultTemplate();
+        const provisionResult = await provisionDynamicAgent({
+          userId: p.userId.trim(),
+          agentId: p.agentId?.trim(),
+          template,
+          storage,
+        });
         const response: BindUserResponse = {
           success: true,
           binding: existingBinding,
-          agent: agentRecord
-            ? {
-                agentId: agentRecord.agentId,
-                workspacePath: agentRecord.workspacePath,
-                agentDirPath: agentRecord.agentDirPath,
-                isNew: false,
-              }
-            : undefined,
+          agent: {
+            agentId: provisionResult.agentId,
+            workspacePath: provisionResult.workspacePath,
+            agentDirPath: provisionResult.agentDirPath,
+            isNew: provisionResult.isNew,
+          },
         };
         respond(true, response, undefined);
         return;
