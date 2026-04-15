@@ -131,6 +131,10 @@ const BASE_METHODS = [
   "chat.history",
   "chat.abort",
   "chat.send",
+  // Dynamic agent management methods
+  "dynamic.bindUser",
+  "dynamic.unbindUser",
+  "dynamic.status",
 ];
 
 export function listGatewayMethods(): string[] {

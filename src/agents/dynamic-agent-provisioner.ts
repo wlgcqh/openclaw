@@ -53,11 +53,26 @@ export async function provisionDynamicAgent(
   // Check if agent already exists in storage
   const existingAgent = params.storage.resolveAgent(agentId);
   if (existingAgent) {
+    // Ensure directories exist even if record exists (may have been deleted)
+    let dirsCreated = false;
+    try {
+      await fs.stat(workspacePath);
+    } catch {
+      await fs.mkdir(workspacePath, { recursive: true });
+      await createDefaultWorkspaceFiles(workspacePath, params.userId);
+      dirsCreated = true;
+    }
+    try {
+      await fs.stat(agentDirPath);
+    } catch {
+      await fs.mkdir(agentDirPath, { recursive: true });
+      dirsCreated = true;
+    }
     return {
       agentId,
       workspacePath: existingAgent.workspacePath,
       agentDirPath: existingAgent.agentDirPath,
-      isNew: false,
+      isNew: dirsCreated,
     };
   }
 
