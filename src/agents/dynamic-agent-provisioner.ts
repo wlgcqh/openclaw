@@ -3,6 +3,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { normalizeAgentId } from "../routing/session-key.js";
 import { resolveUserPath } from "../utils.js";
 import type { DynamicAgentRecord, DynamicAgentStorageService } from "./dynamic-agent-storage.js";
 
@@ -42,7 +43,9 @@ function resolveTemplatePath(template: string, agentId: string): string {
 export async function provisionDynamicAgent(
   params: ProvisionAgentParams,
 ): Promise<ProvisionAgentResult> {
-  const agentId = params.agentId ?? `agent_${params.userId}`;
+  // Normalize agentId for path/shell safety (e.g., "qi.heng" -> "qi-heng")
+  const rawAgentId = params.agentId ?? `agent_${params.userId}`;
+  const agentId = normalizeAgentId(rawAgentId);
   const workspacePath = resolveUserPath(
     resolveTemplatePath(params.template.workspaceTemplate, agentId),
   );

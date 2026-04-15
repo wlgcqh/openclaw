@@ -6,6 +6,7 @@ import path from "node:path";
 import { z } from "zod";
 import { resolveStateDir } from "../config/paths.js";
 import { writeJsonFileAtomically } from "../plugin-sdk/json-store.js";
+import { normalizeAgentId } from "../routing/session-key.js";
 import { safeParseJsonWithSchema } from "../utils/zod-parse.js";
 
 export type DynamicBindingRecord = {
@@ -136,7 +137,16 @@ export class DynamicAgentStorageService {
     if (!this.storage) {
       return null;
     }
-    return this.storage.bindings.find((b) => b.userId === userId) ?? null;
+    // Try exact match first, then try normalized match for backwards compatibility
+    const exactMatch = this.storage.bindings.find((b) => b.userId === userId) ?? null;
+    if (exactMatch) {
+      return exactMatch;
+    }
+    // Fallback: compare normalized agentIds (handles cases like "qi.heng" -> "qi-heng")
+    const normalizedUserId = userId.toLowerCase().trim();
+    return (
+      this.storage.bindings.find((b) => normalizeAgentId(b.userId) === normalizedUserId) ?? null
+    );
   }
 
   listBindings(): DynamicBindingRecord[] {
@@ -170,7 +180,16 @@ export class DynamicAgentStorageService {
     if (!this.storage) {
       return null;
     }
-    return this.storage.agents.find((a) => a.agentId === agentId) ?? null;
+    // Try exact match first, then try normalized match for backwards compatibility
+    const exactMatch = this.storage.agents.find((a) => a.agentId === agentId) ?? null;
+    if (exactMatch) {
+      return exactMatch;
+    }
+    // Fallback: compare normalized agentIds (handles cases like "agent_qi.heng" -> "agent_qi-heng")
+    return (
+      this.storage.agents.find((a) => normalizeAgentId(a.agentId) === normalizeAgentId(agentId)) ??
+      null
+    );
   }
 }
 

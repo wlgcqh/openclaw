@@ -19,6 +19,7 @@ import {
   resolvePrimaryStringValue,
 } from "../shared/string-coerce.js";
 import { resolveUserPath } from "../utils.js";
+import { getGlobalDynamicAgentStorageService } from "./dynamic-agent-storage.js";
 import { resolveEffectiveAgentSkillFilter } from "./skills/agent-filter.js";
 import { resolveDefaultAgentWorkspaceDir } from "./workspace.js";
 
@@ -282,6 +283,16 @@ export function resolveAgentWorkspaceDir(cfg: OpenClawConfig, agentId: string) {
   if (configured) {
     return stripNullBytes(resolveUserPath(configured));
   }
+
+  // Check dynamic agent storage for workspace path
+  const dynamicStorage = getGlobalDynamicAgentStorageService();
+  if (dynamicStorage) {
+    const dynamicAgent = dynamicStorage.resolveAgent(id);
+    if (dynamicAgent?.workspacePath) {
+      return stripNullBytes(dynamicAgent.workspacePath);
+    }
+  }
+
   const defaultAgentId = resolveDefaultAgentId(cfg);
   const fallback = cfg.agents?.defaults?.workspace?.trim();
   if (id === defaultAgentId) {
