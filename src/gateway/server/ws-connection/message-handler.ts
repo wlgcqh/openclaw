@@ -1,7 +1,14 @@
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import type { WebSocket } from "ws";
-import { getGlobalDynamicAgentStorageService } from "../../../agents/dynamic-agent-storage.js";
+import {
+  getDefaultTemplate,
+  provisionDynamicAgent,
+} from "../../../agents/dynamic-agent-provisioner.js";
+import {
+  getGlobalDynamicAgentStorageService,
+  initializeGlobalDynamicAgentStorage,
+} from "../../../agents/dynamic-agent-storage.js";
 import { loadConfig } from "../../../config/config.js";
 import {
   getBoundDeviceBootstrapProfile,
@@ -1229,16 +1236,46 @@ export function attachGatewayWsMessageHandler(params: {
         if (isDynamicBindingEnabled()) {
           const userId = connectParams.userId?.trim();
           if (userId) {
-            const storageService = getGlobalDynamicAgentStorageService();
-            if (storageService) {
-              const binding = storageService.resolveBindingByUserId(userId);
-              if (binding) {
-                dynamicAgentId = binding.agentId;
+            let storageService = getGlobalDynamicAgentStorageService();
+            if (!storageService) {
+              // Initialize if not already done
+              storageService = initializeGlobalDynamicAgentStorage();
+            }
+            const binding = storageService.resolveBindingByUserId(userId);
+            if (binding) {
+              dynamicAgentId = binding.agentId;
+              logGateway.info(
+                `dynamic agent resolved: userId=${userId} -> agentId=${dynamicAgentId}`,
+              );
+            } else {
+              // Auto-create binding for new users
+              logGateway.info(
+                `dynamic agent: no binding found for userId=${userId}, auto-creating...`,
+              );
+              try {
+                const template = getDefaultTemplate();
+                const provisionResult = await provisionDynamicAgent({
+                  userId,
+                  template,
+                  storage: storageService,
+                });
+
+                // Create binding record
+                const now = Date.now();
+                const bindingRecord = {
+                  senderId: userId, // Use userId as senderId for web clients
+                  userId,
+                  agentId: provisionResult.agentId,
+                  createdAt: now,
+                };
+                await storageService.addBinding(bindingRecord);
+
+                dynamicAgentId = provisionResult.agentId;
                 logGateway.info(
-                  `dynamic agent resolved: userId=${userId} -> agentId=${dynamicAgentId}`,
+                  `dynamic agent auto-created: userId=${userId} -> agentId=${dynamicAgentId}`,
                 );
-              } else {
-                logGateway.info(`dynamic agent: no binding found for userId=${userId}`);
+              } catch (err) {
+                logGateway.error(`failed to auto-create dynamic agent for userId=${userId}:`, err);
               }
             }
           }
