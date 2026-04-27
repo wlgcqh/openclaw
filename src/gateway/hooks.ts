@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { listAgentIds, resolveDefaultAgentId } from "../agents/agent-scope-config.js";
+import { getGlobalDynamicAgentStorageService } from "../agents/dynamic-agent-storage.js";
 import { listChannelPlugins } from "../channels/plugins/index.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { readJsonBodyWithLimit, requestBodyErrorToText } from "../infra/http-body.js";
@@ -114,6 +115,13 @@ export function resolveHooksConfig(cfg: OpenClawConfig): HooksConfigResolved | n
 function resolveKnownAgentIds(cfg: OpenClawConfig, defaultAgentId: string): Set<string> {
   const known = new Set(listAgentIds(cfg));
   known.add(defaultAgentId);
+  // Also add dynamic agent IDs
+  const dynamicStorage = getGlobalDynamicAgentStorageService();
+  if (dynamicStorage) {
+    for (const agent of dynamicStorage.listAgents()) {
+      known.add(agent.agentId);
+    }
+  }
   return known;
 }
 

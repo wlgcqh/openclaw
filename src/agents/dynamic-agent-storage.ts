@@ -172,6 +172,10 @@ export class DynamicAgentStorageService {
     }
     return this.storage.agents.find((a) => a.agentId === agentId) ?? null;
   }
+
+  listAgents(): DynamicAgentRecord[] {
+    return this.storage?.agents ?? [];
+  }
 }
 
 // Global storage service singleton for routing integration

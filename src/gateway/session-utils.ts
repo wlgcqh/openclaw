@@ -10,6 +10,7 @@ import {
 } from "../agents/agent-scope.js";
 import { lookupContextTokens, resolveContextTokensForModel } from "../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
+import { getGlobalDynamicAgentStorageService } from "../agents/dynamic-agent-storage.js";
 import type { ModelCatalogEntry } from "../agents/model-catalog.js";
 import {
   inferUniqueProviderFromConfiguredModels,
@@ -466,6 +467,11 @@ export function resolveDeletedAgentIdFromSessionKey(
   }
   const agentId = normalizeAgentId(parsed.agentId);
   if (listAgentIds(cfg).includes(agentId)) {
+    return null;
+  }
+  // Also check dynamic agent storage
+  const dynamicStorage = getGlobalDynamicAgentStorageService();
+  if (dynamicStorage && dynamicStorage.resolveAgent(agentId)) {
     return null;
   }
   return agentId;
